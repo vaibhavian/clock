@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Precision Rectangular Analog Clock</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --text-color: #000000;
+            --clock-width: 90vw;
+            --clock-height: 65vh;
+            --smooth-radius: 60px;
+        }
+
+        body {
+            background: transparent;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 20px;
+            overflow: hidden;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            gap: 15px;
+        }
+
+        /* External Date Styling - Bold, Times New Roman, All Caps */
+        .date-container {
+            font-family: 'Times New Roman', Times, serif;
+            font-weight: bold;
+            font-size: clamp(1.8rem, 5vw, 3.5rem);
+            color: var(--text-color);
+            text-transform: uppercase;
+            letter-spacing: 0.25em;
+            text-align: center;
+            width: 100%;
+        }
+
+        /* Rectangular Clock Container with Smooth Corners */
+        .clock-container {
+            position: relative;
+            width: var(--clock-width);
+            height: var(--clock-height);
+            background: rgba(255, 255, 255, 0.05);
+            border: 12px solid var(--text-color);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--smooth-radius);
+        }
+
+        /* Clock Numbers */
+        .number {
+            position: absolute;
+            font-size: min(8vw, 8vh);
+            font-weight: 900;
+            color: var(--text-color);
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            width: 120px;
+            height: 120px;
+            z-index: 5;
+        }
+
+        /* Small markers */
+        .marker {
+            position: absolute;
+            width: 5px;
+            height: 25px;
+            background: rgba(0, 0, 0, 0.3);
+            pointer-events: none;
+            border-radius: 2px;
+        }
+
+        /* Hands */
+        .hand {
+            position: absolute;
+            bottom: 50%;
+            left: 50%;
+            transform-origin: bottom center;
+            border-radius: 20px;
+            transition: none;
+        }
+
+        .hour-hand {
+            width: 18px;
+            height: 24%;
+            background: var(--text-color);
+            margin-left: -9px;
+            z-index: 3;
+        }
+
+        .minute-hand {
+            width: 10px;
+            height: 38%;
+            background: var(--text-color);
+            margin-left: -5px;
+            z-index: 2;
+        }
+
+        .second-hand {
+            width: 3px;
+            height: 44%;
+            background: #e11d48;
+            margin-left: -1.5px;
+            z-index: 4;
+        }
+
+        .center-dot {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            background: var(--text-color);
+            border-radius: 50%;
+            z-index: 10;
+            border: 6px solid white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        /* External Digital Time Display */
+        .digital-time-external {
+            font-size: clamp(2rem, 6vw, 4.5rem);
+            font-weight: 900;
+            color: var(--text-color);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 5px;
+            text-align: center;
+            width: 100%;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Date outside at the top -->
+    <div id="date-display" class="date-container">JANUARY 01, 2024</div>
+
+    <div class="clock-container" id="clock">
+        <div class="center-dot"></div>
+        
+        <div id="hour" class="hand hour-hand"></div>
+        <div id="minute" class="hand minute-hand"></div>
+        <div id="second" class="hand second-hand"></div>
+    </div>
+
+    <!-- Digital Time outside at the bottom -->
+    <div id="digital-display" class="digital-time-external">00:00:00</div>
+
+    <script>
+        const hourHand = document.getElementById('hour');
+        const minuteHand = document.getElementById('minute');
+        const secondHand = document.getElementById('second');
+        const digitalDisplay = document.getElementById('digital-display');
+        const dateDisplay = document.getElementById('date-display');
+        const clockContainer = document.getElementById('clock');
+
+        function getPointOnRectPerimeter(percent, width, height, padding) {
+            const w = width - padding * 2;
+            const h = height - padding * 2;
+            const perimeter = 2 * (w + h);
+            let distance = (percent * perimeter) % perimeter;
+            let currentDist = w / 2;
+            distance = (distance + currentDist) % perimeter;
+
+            if (distance <= w) {
+                return { x: distance - w / 2, y: -h / 2, side: 'top' };
+            } else if (distance <= w + h) {
+                return { x: w / 2, y: (distance - w) - h / 2, side: 'right' };
+            } else if (distance <= 2 * w + h) {
+                return { x: w / 2 - (distance - (w + h)), y: h / 2, side: 'bottom' };
+            } else {
+                return { x: -w / 2, y: h / 2 - (distance - (2 * w + h)), side: 'left' };
+            }
+        }
+
+        function setupClockFace() {
+            const elements = document.querySelectorAll('.number, .marker');
+            elements.forEach(el => el.remove());
+
+            const rect = clockContainer.getBoundingClientRect();
+            const w = rect.width;
+            const h = rect.height;
+            
+            const numPadding = 85; 
+            const markerPadding = 30;
+
+            for (let i = 1; i <= 12; i++) {
+                const percent = i / 12;
+                const pos = getPointOnRectPerimeter(percent, w, h, numPadding);
+                const numContainer = document.createElement('div');
+                numContainer.className = 'number';
+                numContainer.innerHTML = i;
+                numContainer.style.left = `calc(50% + ${pos.x}px)`;
+                numContainer.style.top = `calc(50% + ${pos.y}px)`;
+                numContainer.style.transform = 'translate(-50%, -50%)';
+                clockContainer.appendChild(numContainer);
+            }
+
+            for (let i = 0; i < 60; i++) {
+                if (i % 5 === 0) continue; 
+                const percent = i / 60;
+                const pos = getPointOnRectPerimeter(percent, w, h, markerPadding);
+                const marker = document.createElement('div');
+                marker.className = 'marker';
+                marker.style.left = `calc(50% + ${pos.x}px)`;
+                marker.style.top = `calc(50% + ${pos.y}px)`;
+                let rotation = (pos.side === 'left' || pos.side === 'right') ? 90 : 0;
+                marker.style.transform = `translate(-50%, -50%) rotate(${rotation}deg)`;
+                clockContainer.appendChild(marker);
+            }
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const ms = now.getMilliseconds();
+            const seconds = now.getSeconds();
+            const minutes = now.getMinutes();
+            const hours = now.getHours();
+
+            // Precision Hand Movement
+            const secondsRotation = (seconds + ms / 1000) * 6;
+            const minutesRotation = (minutes * 6) + (seconds / 60) * 6;
+            const hoursRotation = ((hours % 12) * 30) + (minutes / 60) * 30 + (seconds / 3600) * 30;
+
+            secondHand.style.transform = `rotate(${secondsRotation}deg)`;
+            minuteHand.style.transform = `rotate(${minutesRotation}deg)`;
+            hourHand.style.transform = `rotate(${hoursRotation}deg)`;
+
+            // Digital Time Display
+            const hDisplay = hours.toString().padStart(2, '0');
+            const mDisplay = minutes.toString().padStart(2, '0');
+            const sDisplay = seconds.toString().padStart(2, '0');
+            digitalDisplay.textContent = `${hDisplay}:${mDisplay}:${sDisplay}`;
+
+            // Date Display
+            const options = { month: 'long', day: '2-digit', year: 'numeric' };
+            dateDisplay.textContent = now.toLocaleDateString('en-US', options).toUpperCase();
+
+            requestAnimationFrame(updateClock);
+        }
+
+        setupClockFace();
+        requestAnimationFrame(updateClock);
+
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(setupClockFace, 100);
+        });
+    </script>
+</body>
+</html>
